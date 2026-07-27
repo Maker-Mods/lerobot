@@ -36,8 +36,8 @@ class MetalLeaderConfig(TeleoperatorConfig):
     port: str = "can1"
 
     # CAN interface type: "socketcan" (Linux), "slcan" (serial), or "auto" (auto-detect).
-    # Default is auto: /dev/* paths → slcan, everything else (e.g. "can1") → socketcan.
-    can_interface: str = "auto"
+    # Default is socketcan for performance; slcand is used to expose /dev/ttyACM* as can1.
+    can_interface: str = "socketcan"
 
     # Metal uses classic CAN @ 1 Mbps (not CAN FD)
     can_bitrate: int = 1_000_000
