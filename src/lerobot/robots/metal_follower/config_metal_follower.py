@@ -39,8 +39,9 @@ class MetalFollowerConfigBase:
     # CAN interface (e.g. "can0"). Linux: "can0", "can1", etc.
     port: str = "can0"
 
-    # CAN interface type: "socketcan" (Linux), "slcan" (serial), or "auto" (auto-detect)
-    can_interface: str = "socketcan"
+    # CAN interface type: "socketcan" (Linux), "slcan" (serial), or "auto" (auto-detect).
+    # Default is auto: /dev/* paths → slcan, everything else (e.g. "can0") → socketcan.
+    can_interface: str = "auto"
 
     # Metal uses classic CAN @ 1 Mbps (not CAN FD)
     can_bitrate: int = 1_000_000
