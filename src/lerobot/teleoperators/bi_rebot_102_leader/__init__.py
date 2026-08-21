@@ -16,5 +16,6 @@
 
 from .bi_rebot_102_leader import BiRebot102Leader
 from .config_bi_rebot_102_leader import BiRebot102LeaderConfig
+from .config_bi_rebot_102_leader_maker import BiRebot102LeaderMakerConfig
 
-__all__ = ["BiRebot102Leader", "BiRebot102LeaderConfig"]
+__all__ = ["BiRebot102Leader", "BiRebot102LeaderConfig", "BiRebot102LeaderMakerConfig"]
