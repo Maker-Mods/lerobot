@@ -169,11 +169,17 @@ timm-dep = ["timm>=1.0.0,<1.1.0"]
 # Motors
 feetech = ["feetech-servo-sdk>=1.0.0,<2.0.0", "lerobot[pyserial-dep]", "lerobot[deepdiff-dep]"]
 dynamixel = ["dynamixel-sdk>=3.7.31,<3.9.0", "lerobot[pyserial-dep]", "lerobot[deepdiff-dep]"]
-damiao = ["lerobot[can-dep]"]
-robstride = ["lerobot[can-dep]"]
+# pyserial backs python-can's "slcan" interface, the only CAN transport available on
+# macOS/Windows (SocketCAN is Linux-only). python-can declares pyserial under its own
+# optional extras, so without this a `slcan` bus raises ImportError at connect time.
+damiao = ["lerobot[can-dep]", "lerobot[pyserial-dep]"]
+robstride = ["lerobot[can-dep]", "lerobot[pyserial-dep]"]
 
 # Robots
 openarms = ["lerobot[damiao]"]
+# The Maker arm follower speaks the RobStride private CAN protocol; the Star leader that drives
+# it lives behind the `rebot` extra.
+maker = ["lerobot[robstride]"]
 gamepad = ["lerobot[pygame-dep]", "hidapi>=0.14.0,<0.15.0"]
 hopejr = ["lerobot[feetech]", "lerobot[pygame-dep]"]
 lekiwi = ["lerobot[feetech]", "lerobot[pyzmq-dep]"]
@@ -304,6 +310,7 @@ all = [
     "lerobot[gamepad]",
     "lerobot[hopejr]",
     "lerobot[lekiwi]",
+    "lerobot[maker]",
     "lerobot[openarms]",
     "lerobot[reachy2]",
     "lerobot[rebot]",
