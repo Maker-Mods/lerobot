@@ -180,6 +180,9 @@ robstride = ["lerobot[can-dep]", "lerobot[pyserial-dep]"]
 openarms = ["lerobot[damiao]"]
 # pin-dep is for the leader's gravity compensation; the follower needs only the CAN stack.
 metal = ["lerobot[damiao]", "lerobot[pin-dep]"]
+# The Maker arm follower speaks the RobStride private CAN protocol; the Star leader that drives
+# it lives behind the `rebot` extra.
+maker = ["lerobot[robstride]"]
 gamepad = ["lerobot[pygame-dep]", "hidapi>=0.14.0,<0.15.0"]
 hopejr = ["lerobot[feetech]", "lerobot[pygame-dep]"]
 lekiwi = ["lerobot[feetech]", "lerobot[pyzmq-dep]"]
@@ -311,6 +314,7 @@ all = [
     "lerobot[hopejr]",
     "lerobot[lekiwi]",
     "lerobot[metal]",
+    "lerobot[maker]",
     "lerobot[openarms]",
     "lerobot[reachy2]",
     "lerobot[rebot]",

@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .bi_rebot_102_leader import BiRebot102Leader
-from .config_bi_rebot_102_leader import BiRebot102LeaderConfig
-from .config_bi_rebot_102_leader_maker import BiRebot102LeaderMakerConfig
+from .bi_maker_follower import BiMakerFollower
+from .config_bi_maker_follower import BiMakerFollowerConfig
 
-__all__ = ["BiRebot102Leader", "BiRebot102LeaderConfig", "BiRebot102LeaderMakerConfig"]
+__all__ = ["BiMakerFollower", "BiMakerFollowerConfig"]

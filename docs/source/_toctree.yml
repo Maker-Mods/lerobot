@@ -167,6 +167,8 @@
     title: reBot B601-DM
   - local: metal
     title: Metal
+  - local: maker
+    title: Maker Arm
   - local: third_party_robots
     title: Third-Party Robots & Teleoperators
   title: "Robots"
