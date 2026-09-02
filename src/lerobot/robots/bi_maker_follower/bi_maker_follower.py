@@ -63,6 +63,8 @@ class BiMakerFollower(BimanualMixin, Robot):
                 gains=arm_config.gains,
                 startup_sync_speed_deg=arm_config.startup_sync_speed_deg,
                 startup_sync_tolerance_deg=arm_config.startup_sync_tolerance_deg,
+                startup_sync_release_speed_deg=arm_config.startup_sync_release_speed_deg,
+                stale_read_timeout_s=arm_config.stale_read_timeout_s,
                 max_relative_target=arm_config.max_relative_target,
                 disable_torque_on_disconnect=arm_config.disable_torque_on_disconnect,
                 cameras=left_arm_cameras if side == "left" else arm_config.cameras,

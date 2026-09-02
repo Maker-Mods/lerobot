@@ -24,6 +24,7 @@ from lerobot.lerobot_types import RobotAction, RobotObservation
 from lerobot.motors import Motor, MotorCalibration, MotorNormMode
 from lerobot.motors.robstride import RobstrideMotorsBus
 from lerobot.utils.decorators import check_if_already_connected, check_if_not_connected
+from lerobot.utils.errors import DeviceNotConnectedError
 
 from ..robot import Robot
 from ..utils import ensure_safe_goal_position
@@ -118,6 +119,8 @@ class MakerFollower(Robot):
         # False until the follower has caught up to the leader (slow initial sync), then full speed.
         self._synced = False
         self._synced_motors: set[str] = set()
+        # Joints released from the slow ramp by a stall, still rate-limited (see `send_action`).
+        self._released_motors: set[str] = set()
         self._sync_progress: dict[str, tuple[float, float]] = {}
         self._resolved_gains: dict[str, tuple[float, float]] = {}
         # Per-session +-360 deg correction per joint, see `_detect_full_turn_offsets`.
@@ -128,6 +131,40 @@ class MakerFollower(Robot):
         self._stale_zero: dict[str, float] = {}
         # Last good reading per joint, used when a motor misses a reply.
         self._last_positions: dict[str, float] = {}
+        # When each joint last answered a read, for the stale-read watchdog.
+        self._last_read_ok: dict[str, float] = {}
+        self._reset_read_freshness()
+
+    def _reset_read_freshness(self) -> None:
+        """Start the stale-read watchdog's window now, for every joint.
+
+        Called at construction, at connect, and after a recalibration, so a long gap between
+        opening the bus and the first read is never mistaken for a silent arm.
+        """
+        now = time.perf_counter()
+        self._last_read_ok = dict.fromkeys(self._joint_motor_names, now)
+
+    def _check_read_freshness(self, now: float) -> None:
+        """Raise once EVERY joint has gone quiet for longer than `stale_read_timeout_s`.
+
+        One joint missing its reply is normal and must not raise: a shallow-FIFO USB-CAN adapter
+        drops frames, which is exactly what the last-known-value substitution in
+        `_read_raw_positions` exists to absorb. An arm that has lost power or had its CAN cable
+        pulled goes silent on *all* seven joints at once, and without this check the substitution
+        hides that forever -- a record loop keeps running on a frozen pose and writes it to the
+        dataset tick after tick. So staleness only counts when no joint at all has answered
+        within the window.
+        """
+        timeout = self.config.stale_read_timeout_s
+        if timeout is None:
+            return
+        silent_for = now - max(self._last_read_ok.values())
+        if silent_for > timeout:
+            raise DeviceNotConnectedError(
+                f"{self} stopped answering: no joint has replied for {silent_for:.1f} seconds "
+                f"(the limit is {timeout:.1f}). The arm has lost power or its CAN cable is "
+                "disconnected. Reconnect it and start again."
+            )
 
     def _detect_full_turn_offsets(self) -> None:
         """Pick a +-360 deg correction for joints that report a whole turn outside their limits.
@@ -171,9 +208,11 @@ class MakerFollower(Robot):
         third of the frames came back stale, which lands in a recorded dataset as a repeated
         observation. `read` sends one request and waits for that motor's reply, so each frame
         has the bus to itself, at a cost of about a millisecond per joint. A motor that still
-        misses its reply keeps its previous value rather than failing the tick.
+        misses its reply keeps its previous value rather than failing the tick -- but only for
+        as long as some other joint is still answering, see `_check_read_freshness`.
         """
         positions: dict[str, float] = {}
+        now = time.perf_counter()
         for motor in self._joint_motor_names:
             try:
                 positions[motor] = float(self.bus.read("Present_Position", motor))
@@ -183,6 +222,9 @@ class MakerFollower(Robot):
                     raise
                 logger.debug("%s no reply from %s, keeping the previous position", self, motor)
                 positions[motor] = previous
+            else:
+                self._last_read_ok[motor] = now
+        self._check_read_freshness(now)
         self._last_positions = positions
         return positions
 
@@ -214,6 +256,8 @@ class MakerFollower(Robot):
     def connect(self, calibrate: bool = True) -> None:
         logger.info(f"Connecting arm on {self.config.port}...")
         self.bus.connect()
+        # Before the first read of this session, so opening the bus never counts as silence.
+        self._reset_read_freshness()
         try:
             for cam in self.cameras.values():
                 cam.connect()
@@ -243,6 +287,7 @@ class MakerFollower(Robot):
         # Re-arm the slow initial sync on every connect.
         self._synced = False
         self._synced_motors = set()
+        self._released_motors = set()
         self._sync_progress = {}
 
         logger.info(f"{self} connected.")
@@ -286,6 +331,7 @@ class MakerFollower(Robot):
         self._turn_offset = dict.fromkeys(self._joint_motor_names, 0.0)
         self._stale_zero = {}
         self._last_positions = {}
+        self._reset_read_freshness()
         logger.info("Arm zero position set.")
 
         self.calibration = {}
@@ -362,9 +408,14 @@ class MakerFollower(Robot):
         # has caught up to the leader, so firm follow gains don't snap it across a large gap.
         # Sync is per joint: a joint that cannot converge (parked past a soft limit, or stiction
         # above what kp * step can overcome) is released after a stall instead of capping the
-        # whole arm forever; max_relative_target still bounds its speed after release.
+        # whole arm forever. Release is to `startup_sync_release_speed_deg`, not to the raw
+        # target: the gap that the joint could not close is exactly the gap it would then be
+        # commanded across in one step, at full MIT gain. A released joint stays rate-limited
+        # (and so the arm stays "not synced") until it comes within tolerance, which for a
+        # genuinely stuck joint is never -- the other joints reach tolerance, land in
+        # `_synced_motors` and track at full speed regardless.
         if syncing:
-            step = self.config.startup_sync_speed_deg
+            release = self.config.startup_sync_release_speed_deg
             now = time.perf_counter()
             for motor_name, position in goal_pos.items():
                 if motor_name in self._synced_motors:
@@ -373,19 +424,33 @@ class MakerFollower(Robot):
                 err = position - present
                 if abs(err) <= self.config.startup_sync_tolerance_deg:
                     self._synced_motors.add(motor_name)
+                    self._released_motors.discard(motor_name)
                     continue
-                last_pos, last_progress_t = self._sync_progress.get(motor_name, (present, now))
-                if abs(present - last_pos) > _SYNC_PROGRESS_EPS_DEG:
-                    self._sync_progress[motor_name] = (present, now)
-                elif now - last_progress_t > _SYNC_STALL_RELEASE_SEC:
-                    logger.warning(
-                        f"{self} startup sync stalled on {motor_name} ({abs(err):.1f} deg from goal); "
-                        "releasing it to full speed."
-                    )
-                    self._synced_motors.add(motor_name)
-                    continue
+                step = self.config.startup_sync_speed_deg
+                if motor_name in self._released_motors:
+                    # Already released: step at the release rate, and skip the stall test so a
+                    # still-stuck joint does not re-log the warning on every tick.
+                    step = release
                 else:
-                    self._sync_progress.setdefault(motor_name, (present, now))
+                    last_pos, last_progress_t = self._sync_progress.get(motor_name, (present, now))
+                    if abs(present - last_pos) > _SYNC_PROGRESS_EPS_DEG:
+                        self._sync_progress[motor_name] = (present, now)
+                    elif now - last_progress_t > _SYNC_STALL_RELEASE_SEC:
+                        if release is None:
+                            logger.warning(
+                                f"{self} startup sync stalled on {motor_name} ({abs(err):.1f} deg "
+                                "from goal); releasing it to full speed."
+                            )
+                            self._synced_motors.add(motor_name)
+                            continue
+                        logger.warning(
+                            f"{self} startup sync stalled on {motor_name} ({abs(err):.1f} deg from "
+                            f"goal); releasing it to {release:.1f} deg/step."
+                        )
+                        self._released_motors.add(motor_name)
+                        step = release
+                    else:
+                        self._sync_progress.setdefault(motor_name, (present, now))
                 goal_pos[motor_name] = present + max(-step, min(step, err))
             if len(self._synced_motors) >= len(goal_pos):
                 self._synced = True

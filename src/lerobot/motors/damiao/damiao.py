@@ -152,6 +152,9 @@ class DamiaoMotorsBus(MotorsBusBase):
             for name in self.motors
         }
 
+        # When each motor's cached state last came from a real decoded reply. See `last_update_ts`.
+        self._last_update_ts: dict[str, float] = dict.fromkeys(self.motors, time.perf_counter())
+
         # Dynamic gains storage
         # Defaults: Kp=10.0 (Stiffness), Kd=0.5 (Damping)
         self._gains: dict[str, dict[str, float]] = {name: {"kp": 10.0, "kd": 0.5} for name in self.motors}
@@ -585,6 +588,9 @@ class DamiaoMotorsBus(MotorsBusBase):
                 "temp_mos": float(t_mos),
                 "temp_rotor": float(t_rotor),
             }
+            # Stamped only on a successfully decoded reply: a frame we could not decode tells us
+            # nothing about the motor being alive, so it must not refresh the freshness signal.
+            self._last_update_ts[motor] = time.perf_counter()
         except Exception as e:
             logger.warning(f"Failed to decode response from {motor}: {e}")
 
@@ -605,6 +611,28 @@ class DamiaoMotorsBus(MotorsBusBase):
 
         self._process_response(motor, msg)
         return self._get_cached_value(motor, data_name)
+
+    @property
+    def last_update_ts(self) -> dict[str, float]:
+        """`time.perf_counter()` of each motor's last successfully decoded reply, as a copy.
+
+        `sync_read` and `read` serve the state cache when a reply is missing (see
+        `_batch_refresh`), which is right for the occasional dropped frame but leaves a
+        powered-down or unplugged arm indistinguishable from a healthy one: the same positions
+        keep coming back forever. This is the freshness signal a caller needs to tell the two
+        apart -- compare against it and decide, since staleness on a single motor is normal and
+        staleness on every motor at once is not.
+        """
+        return dict(self._last_update_ts)
+
+    def reset_update_timestamps(self) -> None:
+        """Mark every motor as heard-from now, without touching the cached state itself.
+
+        Callers use this at connect (and after any deliberate pause) so a gap in which nobody
+        asked the bus for anything is not later mistaken for the motors having gone silent.
+        """
+        now = time.perf_counter()
+        self._last_update_ts = dict.fromkeys(self.motors, now)
 
     def _get_cached_value(self, motor: str, data_name: str) -> Value:
         """Retrieve a specific value from the cache."""

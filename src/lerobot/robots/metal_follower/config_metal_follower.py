@@ -107,6 +107,23 @@ class MetalFollowerConfigBase:
     startup_sync_speed_deg: float | None = 1.0
     startup_sync_tolerance_deg: float = 3.0
 
+    # Release rate for a joint that stalls during the startup sync (it cannot close the gap at
+    # startup_sync_speed_deg -- parked past a soft limit, or stiction above what kp * step
+    # overcomes). Such a joint keeps stepping toward its target at this many degrees per step
+    # until it comes within startup_sync_tolerance_deg, instead of being handed the raw target.
+    # An unbounded release snaps a stiff joint (kp 390 on shoulder_lift) across whatever gap
+    # remains, at full MIT gain; max_relative_target would bound it, but it defaults to None and
+    # most callers never set it. None restores that unbounded release.
+    startup_sync_release_speed_deg: float | None = 5.0
+
+    # Watchdog for a follower that has stopped answering: power cut, CAN cable pulled, adapter
+    # unplugged. A single motor missing its reply is the normal case (the Damiao bus logs
+    # "Packet drop" and serves that motor from its state cache) and must keep working. But once
+    # EVERY motor has gone this many seconds without a decoded reply, the arm is gone, and
+    # `get_observation` raises rather than returning a frozen pose that a recording would write
+    # to disk tick after tick. Read off the bus's `last_update_ts`. None disables the watchdog.
+    stale_read_timeout_s: float | None = 0.5
+
     # Safety limit for relative target positions (degrees). None disables the check.
     max_relative_target: float | dict[str, float] | None = None
 
