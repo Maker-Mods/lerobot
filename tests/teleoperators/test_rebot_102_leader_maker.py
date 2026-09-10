@@ -36,6 +36,7 @@ from lerobot.teleoperators.rebot_102_leader import (
 )
 from lerobot.teleoperators.rebot_102_leader.config_rebot_102_leader_maker import (
     MAKER_TRIGGER_GRIPPER_TRAVEL_DEG,
+    MAKER_TRIGGER_GRIPPER_USABLE_TRAVEL_DEG,
 )
 from lerobot.teleoperators.utils import make_teleoperator_from_config
 
@@ -166,20 +167,23 @@ def test_trigger_preset_differs_from_lever_only_on_the_gripper():
     assert trigger.joint_directions["gripper"] > 0 > lever.joint_directions["gripper"]
 
 
-def test_trigger_gripper_hard_stops_land_on_the_jaw_limits():
-    """Raw 0 (the calibration stop) is the jaw at zero; the far stop is the jaw fully open.
-
-    The far stop must reach the open limit within a degree WITHOUT relying on the clamp, so
-    the whole trigger pull is usable travel rather than a dead zone at one end.
-    """
+def test_trigger_gripper_half_pull_opens_the_jaw_and_the_far_stop_clamps():
+    """Raw 0 (the calibration stop) is the jaw at zero; HALF the pull is the jaw fully open,
+    reached within a degree without relying on the clamp; the rest of the pull, down to the
+    far hard stop, stays clamped there and never unwraps onto the other 360 deg branch."""
     cfg = RebotArm102LeaderMakerTriggerTeleopConfig(port="/dev/null")
     lo, hi = cfg.joint_ranges["gripper"]
-    at_zero = _action_for_raw(cfg, 0.0)["gripper.pos"]
-    at_far = _action_for_raw(cfg, MAKER_TRIGGER_GRIPPER_TRAVEL_DEG)["gripper.pos"]
-    assert at_zero == pytest.approx(hi)
-    assert at_far == pytest.approx(lo, abs=1.0)
-    raw_at_far = MAKER_TRIGGER_GRIPPER_TRAVEL_DEG * cfg.joint_directions["gripper"]
-    assert lo - 1.0 <= raw_at_far <= lo + 1.0
+    assert _action_for_raw(cfg, 0.0)["gripper.pos"] == pytest.approx(hi)
+    raw_at_half = MAKER_TRIGGER_GRIPPER_USABLE_TRAVEL_DEG * cfg.joint_directions["gripper"]
+    assert lo - 1.0 <= raw_at_half <= lo + 1.0
+    assert _action_for_raw(cfg, MAKER_TRIGGER_GRIPPER_USABLE_TRAVEL_DEG)["gripper.pos"] == pytest.approx(
+        lo, abs=1.0
+    )
+    assert _action_for_raw(cfg, MAKER_TRIGGER_GRIPPER_TRAVEL_DEG)["gripper.pos"] == pytest.approx(lo)
+    # The far stop sits inside the unwrap window with margin (no branch flip).
+    center = (lo + hi) / 2 / cfg.joint_directions["gripper"]
+    window_low = center - 180
+    assert window_low + 30 < MAKER_TRIGGER_GRIPPER_TRAVEL_DEG
 
 
 def test_trigger_gripper_is_monotonic_across_the_pull_and_never_wraps():

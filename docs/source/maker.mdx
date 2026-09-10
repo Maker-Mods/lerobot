@@ -247,7 +247,8 @@ the jaw: the trigger's travel lies outside the band the lever mapped, so the jaw
 one limit and only snaps from closed to open as the servo crosses the edge of the multi-turn
 unwrap window near -150 degrees. Use `rebot_102_leader_maker_trigger` (and
 `bi_rebot_102_leader_maker_trigger` for two leaders) for a trigger leader. It differs from the
-lever preset in one entry, the gripper's `joint_directions` factor (`120 / 186.8 = 0.6424`, positive;
+lever preset in one entry, the gripper's `joint_directions` factor (`120 / 93.4 = 1.2848`, positive: half
+the pull opens the jaw fully and the rest of the pull clamps there;
 the measurement is documented on `RebotArm102LeaderMakerTriggerConfig`).
 
 Calibrate a trigger leader with the trigger at the hard stop that matches the follower's zero-pose
