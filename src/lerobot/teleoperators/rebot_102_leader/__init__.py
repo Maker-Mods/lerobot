@@ -18,6 +18,8 @@ from .config_rebot_102_leader import RebotArm102LeaderConfig, RebotArm102LeaderT
 from .config_rebot_102_leader_maker import (
     RebotArm102LeaderMakerConfig,
     RebotArm102LeaderMakerTeleopConfig,
+    RebotArm102LeaderMakerTriggerConfig,
+    RebotArm102LeaderMakerTriggerTeleopConfig,
 )
 from .config_rebot_102_leader_metal import (
     RebotArm102LeaderMetalConfig,
@@ -30,6 +32,8 @@ __all__ = [
     "RebotArm102LeaderConfig",
     "RebotArm102LeaderMakerConfig",
     "RebotArm102LeaderMakerTeleopConfig",
+    "RebotArm102LeaderMakerTriggerConfig",
+    "RebotArm102LeaderMakerTriggerTeleopConfig",
     "RebotArm102LeaderMetalConfig",
     "RebotArm102LeaderMetalTeleopConfig",
     "RebotArm102LeaderTeleopConfig",

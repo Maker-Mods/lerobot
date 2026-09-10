@@ -23,6 +23,7 @@ from lerobot.robots.maker_follower.config_maker_follower import MakerFollowerCon
 from lerobot.teleoperators.bi_rebot_102_leader import (
     BiRebot102Leader,
     BiRebot102LeaderMakerConfig,
+    BiRebot102LeaderMakerTriggerConfig,
 )
 from lerobot.teleoperators.config import TeleoperatorConfig
 from lerobot.teleoperators.rebot_102_leader import (
@@ -30,6 +31,11 @@ from lerobot.teleoperators.rebot_102_leader import (
     RebotArm102LeaderConfig,
     RebotArm102LeaderMakerConfig,
     RebotArm102LeaderMakerTeleopConfig,
+    RebotArm102LeaderMakerTriggerConfig,
+    RebotArm102LeaderMakerTriggerTeleopConfig,
+)
+from lerobot.teleoperators.rebot_102_leader.config_rebot_102_leader_maker import (
+    MAKER_TRIGGER_GRIPPER_TRAVEL_DEG,
 )
 from lerobot.teleoperators.utils import make_teleoperator_from_config
 
@@ -129,3 +135,82 @@ def test_action_applies_scale_and_stays_inside_range(raw_deg):
     for joint, (lo, hi) in cfg.joint_ranges.items():
         value = action[f"{joint}.pos"]
         assert lo <= value <= hi, joint
+
+
+# --- the trigger-gripper variant -------------------------------------------------------------
+
+
+def _action_for_raw(cfg, raw_deg: float) -> dict[str, float]:
+    with (
+        patch(f"{_MODULE}.require_package", lambda *a, **kw: None),
+        patch(f"{_MODULE}.FashionStarServo", return_value=_make_bus_mock(raw_deg)),
+    ):
+        teleop = RebotArm102Leader(cfg)
+        teleop.connect(calibrate=False)
+        try:
+            return teleop.get_action()
+        finally:
+            teleop.disconnect()
+
+
+def test_trigger_preset_differs_from_lever_only_on_the_gripper():
+    lever = RebotArm102LeaderMakerConfig(port="/dev/null")
+    trigger = RebotArm102LeaderMakerTriggerConfig(port="/dev/null")
+    assert trigger.joint_ranges == lever.joint_ranges
+    assert trigger.joint_ids == lever.joint_ids
+    differing = {
+        j for j in lever.joint_directions if trigger.joint_directions[j] != lever.joint_directions[j]
+    }
+    assert differing == {"gripper"}
+    # The lever pulls the servo one way, the trigger the other.
+    assert trigger.joint_directions["gripper"] > 0 > lever.joint_directions["gripper"]
+
+
+def test_trigger_gripper_hard_stops_land_on_the_jaw_limits():
+    """Raw 0 (the calibration stop) is the jaw at zero; the far stop is the jaw fully open.
+
+    The far stop must reach the open limit within a degree WITHOUT relying on the clamp, so
+    the whole trigger pull is usable travel rather than a dead zone at one end.
+    """
+    cfg = RebotArm102LeaderMakerTriggerTeleopConfig(port="/dev/null")
+    lo, hi = cfg.joint_ranges["gripper"]
+    at_zero = _action_for_raw(cfg, 0.0)["gripper.pos"]
+    at_far = _action_for_raw(cfg, MAKER_TRIGGER_GRIPPER_TRAVEL_DEG)["gripper.pos"]
+    assert at_zero == pytest.approx(hi)
+    assert at_far == pytest.approx(lo, abs=1.0)
+    raw_at_far = MAKER_TRIGGER_GRIPPER_TRAVEL_DEG * cfg.joint_directions["gripper"]
+    assert lo - 1.0 <= raw_at_far <= lo + 1.0
+
+
+def test_trigger_gripper_is_monotonic_across_the_pull_and_never_wraps():
+    """The lever factor snapped the jaw closed-to-open near raw -150; the trigger factor must
+    not, anywhere between the two stops (and a little past them)."""
+    cfg = RebotArm102LeaderMakerTriggerTeleopConfig(port="/dev/null")
+    raws = [5.0, 0.0, -20.0, -60.0, -100.0, -150.0, -160.0, -186.8, -195.0]
+    values = [_action_for_raw(cfg, r)["gripper.pos"] for r in raws]
+    assert values == sorted(values, reverse=True), list(zip(raws, values, strict=True))
+    lo, hi = cfg.joint_ranges["gripper"]
+    assert all(lo <= v <= hi for v in values)
+
+
+def test_trigger_types_are_registered_and_build_the_shared_driver():
+    assert TeleoperatorConfig.get_choice_class("rebot_102_leader_maker_trigger") is (
+        RebotArm102LeaderMakerTriggerTeleopConfig
+    )
+    assert TeleoperatorConfig.get_choice_class("bi_rebot_102_leader_maker_trigger") is (
+        BiRebot102LeaderMakerTriggerConfig
+    )
+    with patch(f"{_MODULE}.require_package", lambda *a, **kw: None):
+        single = make_teleoperator_from_config(RebotArm102LeaderMakerTriggerTeleopConfig(port="/dev/null"))
+        bi = make_teleoperator_from_config(
+            draccus.parse(
+                BiRebot102LeaderMakerTriggerConfig,
+                args=["--left_arm_config.port=/dev/a", "--right_arm_config.port=/dev/b"],
+            )
+        )
+    assert isinstance(single, RebotArm102Leader)
+    assert isinstance(bi, BiRebot102Leader)
+    expected = RebotArm102LeaderMakerTriggerConfig(port="x").joint_directions
+    assert single.config.joint_directions == expected
+    assert bi.left_arm.config.joint_directions == expected
+    assert bi.right_arm.config.joint_directions == expected
