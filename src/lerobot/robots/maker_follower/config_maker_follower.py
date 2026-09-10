@@ -100,6 +100,23 @@ class MakerFollowerConfigBase:
     startup_sync_speed_deg: float | None = 1.0
     startup_sync_tolerance_deg: float = 3.0
 
+    # Release rate for a joint that stalls during the startup sync (it cannot close the gap at
+    # startup_sync_speed_deg -- parked past a soft limit, or stiction above what kp * step
+    # overcomes). Such a joint keeps stepping toward its target at this many degrees per step
+    # until it comes within startup_sync_tolerance_deg, instead of being handed the raw target.
+    # An unbounded release snaps a stiff joint (kp 150 on shoulder_lift) across whatever gap
+    # remains, at full MIT gain; max_relative_target would bound it, but it defaults to None and
+    # most callers never set it. None restores that unbounded release.
+    startup_sync_release_speed_deg: float | None = 5.0
+
+    # Watchdog for a follower that has stopped answering: power cut, CAN cable pulled, adapter
+    # unplugged. A single joint missing its reply is the normal case (shallow-FIFO USB-CAN
+    # adapters drop frames from a burst) and keeps substituting that joint's last known
+    # position. But once EVERY joint has gone this many seconds without a successful read, the
+    # arm is gone, and reads raise rather than returning a frozen pose that a recording would
+    # write to disk tick after tick. None disables the watchdog.
+    stale_read_timeout_s: float | None = 0.5
+
     # Safety limit for relative target positions (degrees). None disables the check.
     max_relative_target: float | dict[str, float] | None = None
 
