@@ -80,15 +80,10 @@ class RebotArm102LeaderMakerTeleopConfig(TeleoperatorConfig, RebotArm102LeaderMa
 # Gripper factor for the trigger-style Star leader. Measured 2026-09-10 on the MakerMods trigger
 # unit (servo id 6, multi-turn counter reset first, read_raw_angle): the trigger has a hard stop
 # at both ends, 0.0 deg at the calibration stop and -186.8 deg at the far stop, repeatable to
-# 0.1 deg across two runs. Its sign is positive because the trigger travels the opposite way to
-# the lever. Only the FIRST HALF of the pull is mapped onto the follower's 120 deg jaw
-# (-2.5 .. -120.1): the jaw is fully open at -93.4 deg of trigger and the rest of the pull clamps
-# there, so a full grip does not need the trigger bottomed out. The far stop still unwraps on the
-# right branch: the window `_round_to_valid_range` centres on the mapped raw band spans about
-# -227 .. +132 deg, 40 deg clear of it.
+# 0.1 deg across two runs. The follower's jaw runs 120 deg (-2.5 .. -120.1), so the factor is
+# 120 / 186.8, and its sign is positive because the trigger travels the opposite way to the lever.
 MAKER_TRIGGER_GRIPPER_TRAVEL_DEG = -186.8
-MAKER_TRIGGER_GRIPPER_USABLE_TRAVEL_DEG = MAKER_TRIGGER_GRIPPER_TRAVEL_DEG / 2  # -93.4
-MAKER_TRIGGER_GRIPPER_DIRECTION = round(120.0 / abs(MAKER_TRIGGER_GRIPPER_USABLE_TRAVEL_DEG), 4)  # 1.2848
+MAKER_TRIGGER_GRIPPER_DIRECTION = round(120.0 / abs(MAKER_TRIGGER_GRIPPER_TRAVEL_DEG), 4)  # 0.6424
 
 
 @dataclass
@@ -99,14 +94,13 @@ class RebotArm102LeaderMakerTriggerConfig(RebotArm102LeaderMakerConfig):
     60 deg; MakerMods' revision replaces that with a trigger that turns the same servo about 187
     deg the other way, between two hard stops. Every other joint is untouched, so this preset
     inherits `RebotArm102LeaderMakerConfig` wholesale and overrides ONE entry, the gripper's
-    `joint_directions` factor. `joint_ranges` stays the follower's envelope, unchanged. Half the
-    pull opens the jaw fully; the rest clamps (see MAKER_TRIGGER_GRIPPER_USABLE_TRAVEL_DEG).
+    `joint_directions` factor. `joint_ranges` stays the follower's envelope, unchanged.
 
     With the lever factor a trigger leader barely moves the jaw: its travel lies outside the
     band the lever mapped, so the jaw sits clamped at one limit, and the only motion is a snap
     from fully closed to fully open as the servo crosses the edge of the multi-turn unwrap window
-    near -150 deg. The trigger factor puts the window at about -227 .. +132 raw degrees, 40 deg
-    clear of the far stop.
+    near -150 deg. The trigger factor puts the window at about -275 .. +85 raw degrees, 85 deg
+    clear of either stop.
 
     Calibrate the trigger at the stop that matches the follower's zero-pose jaw state: the mapping
     scales, it does not offset, so raw 0 must be the jaw's zero-pose position on both arms.
