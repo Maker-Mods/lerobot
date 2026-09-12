@@ -238,21 +238,6 @@ pip install -e ".[maker,rebot]"
 Use `rebot_102_leader_maker`, not `rebot_102_leader`. The stock type contains the mapping for a
 reBot B601 follower. The Maker preset supplies its own `joint_directions` and `joint_ranges`.
 
-#### Trigger gripper
-
-MakerMods' revision of the Star Arm 102 replaces the left-right gripper lever with a trigger. The
-trigger turns the same servo about 187 degrees the other way, between two hard stops, where the
-lever turned it about 60 degrees. A trigger leader run with `rebot_102_leader_maker` barely moves
-the jaw: the trigger's travel lies outside the band the lever mapped, so the jaw sits clamped at
-one limit and only snaps from closed to open as the servo crosses the edge of the multi-turn
-unwrap window near -150 degrees. Use `rebot_102_leader_maker_trigger` (and
-`bi_rebot_102_leader_maker_trigger` for two leaders) for a trigger leader. It differs from the
-lever preset in one entry, the gripper's `joint_directions` factor (`120 / 186.8 = 0.6424`, positive;
-the measurement is documented on `RebotArm102LeaderMakerTriggerConfig`).
-
-Calibrate a trigger leader with the trigger at the hard stop that matches the follower's zero-pose
-jaw state, exactly as for the lever: the preset scales, it does not offset.
-
 This macOS example uses one slcan serial port for the follower and one UART serial port for the
 leader:
 

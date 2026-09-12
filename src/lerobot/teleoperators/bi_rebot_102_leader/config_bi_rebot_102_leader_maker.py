@@ -17,7 +17,7 @@
 from dataclasses import dataclass
 
 from ..config import TeleoperatorConfig
-from ..rebot_102_leader import RebotArm102LeaderMakerConfig, RebotArm102LeaderMakerTriggerConfig
+from ..rebot_102_leader import RebotArm102LeaderMakerConfig
 
 
 @TeleoperatorConfig.register_subclass("bi_rebot_102_leader_maker")
@@ -35,16 +35,3 @@ class BiRebot102LeaderMakerConfig(TeleoperatorConfig):
 
     left_arm_config: RebotArm102LeaderMakerConfig
     right_arm_config: RebotArm102LeaderMakerConfig
-
-
-@TeleoperatorConfig.register_subclass("bi_rebot_102_leader_maker_trigger")
-@dataclass
-class BiRebot102LeaderMakerTriggerConfig(TeleoperatorConfig):
-    """Two trigger-gripper reBot Arm 102 leaders driving a bimanual Maker arm follower.
-
-    `bi_rebot_102_leader_maker` with each arm defaulting to the trigger preset
-    (`RebotArm102LeaderMakerTriggerConfig`); see that class for the measured gripper mapping.
-    """
-
-    left_arm_config: RebotArm102LeaderMakerTriggerConfig
-    right_arm_config: RebotArm102LeaderMakerTriggerConfig
